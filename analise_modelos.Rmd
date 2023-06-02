@@ -1,18 +1,39 @@
+---
+title: "Paper"
+author: "Gabriel de Jesus Pereira"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## Pacotes
+
+```{r include=FALSE}
 library(tidymodels)
 library(randomForest)
 library(timetk)
 library(readxl)
 library(visdat)
+library(knitr)
+library(ggplot2)
 tidymodels_prefer()
+```
 
+
+## Dados
+
+```{r}
 dados <- read_excel("./WDOLFUT-DIARIO-02_01_2018_a_03-05-2023.xlsx",
                    col_types = c("date", "numeric", "numeric","numeric", "numeric")
                    )
 
 dados <- dados |> mutate(Ponto_Medio = log(round((Maxima + Minima)/ 2, 2)))
+```
 
-# modelo ponto médio
+## Modelo Ponto Médio
 
+```{r}
 # receita ponto médio
 dados_rec_medio <- dados  |> 
   recipe(Ponto_Medio ~., data = dados) |> 
@@ -67,9 +88,11 @@ tunagem_ponto_medio <-
     control = control_grid(save_pred = TRUE, verbose = TRUE, allow_par = FALSE),
     param_info = rand_params
   )
+```
 
-# modelo maximo
+## Modelo Máxima
 
+```{r}
 dados_rec_maxima <- dados  |> 
   recipe(Maxima ~., data = dados) |> 
   step_arrange(Data) |> 
@@ -84,7 +107,7 @@ dados_final_maxima <- dados_rec_maxima |> prep() |> bake(new_data = dados) |> dr
          Data = Data,
          .keep = "none")
 
-rec_maxima <- dados_final_maxima |> 
+rec_maxima <- dados_final_minima |> 
   recipe(y ~., data = dados_final_maxima)
 
 conjunto_treinamento_maxima <- dados_final_maxima[amostra == 1, ]
@@ -105,9 +128,11 @@ tunagem_maxima <-
     control = control_grid(save_pred = TRUE, verbose = TRUE, allow_par = FALSE),
     param_info = rand_params
   )
+```
 
-# modelo minimo
+## Modelo Mínima
 
+```{r}
 dados_rec_minima <- dados |> 
   recipe(Minima ~., data = dados) |> 
   step_arrange(Data) |> 
@@ -143,12 +168,11 @@ tunagem_minima <-
     control = control_grid(save_pred = TRUE, verbose = TRUE, allow_par = FALSE),
     param_info = rand_params
   )
+```
 
-# salvando modelos
+## Salvando Gráficos
 
-tunagem_maxima |> show_best(metric = "rmse", n = 10)
+```{r}
 
-# atualizar workflow da minima
+```
 
-minima_wf <- minima_wf |> finalize_workflow(select_best(tunagem_minima, "rmse"))
-ajuste_final <- last_fit(minima_wf, dados_final_minima, metrics = metric_set(rsq, rmse))
