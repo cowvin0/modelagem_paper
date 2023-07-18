@@ -11,22 +11,27 @@ dados <- read_excel("./WDOLFUT-DIARIO-02_01_2018_a_03-05-2023.xlsx",
 
 dados <- dados |> mutate(Ponto_Medio = log(round((Maxima + Minima)/ 2, 2)))
 
+# banco de teste e treinamento
+
+divisao_teste_treinamento <- initial_split(data = dados, prop = 0.7)
+conjunto_treinamento <- training(divisao_teste_treinamento)
+conjunto_teste <- testing(divisao_teste_treinamento)
+
 # modelo ponto médio
 
 # receita ponto médio
-dados_rec_medio <- dados  |> 
+dados_rec_medio <- conjunto_treinamento  |> 
   recipe(Ponto_Medio ~., data = dados) |> 
   step_arrange(Data) |> 
-  step_lag(Ponto_Medio, lag = c(1, 9, 22), role = "lag") |> 
+  step_lag(Ponto_Medio, lag = c(1, 22), role = "lag") |> 
   step_rm(c(Maxima, Minima)) |> 
   step_arrange(desc(Data)) |> 
   step_naomit()
 
-dados_final_medio <- dados_rec_medio |> prep() |> bake(new_data = dados) |> drop_na() |> 
+dados_final_medio <- dados_rec_medio |> prep() |> bake(new_data = conjunto_treinamento) |> drop_na() |> 
   mutate(y = log(Ponto_Medio) - log(lag_1_Ponto_Medio),
          x1 = (lag_1_Ponto_Medio/lag_22_Ponto_Medio)^(1/21),
          x2 = Abertura/lag_1_Ponto_Medio,
-         Data = Data,
          .keep = "none")
 
 rec_ponto_medio <- dados_final_medio |> 
@@ -52,11 +57,11 @@ ponto_medio_wf <- workflow() |>
   
 # banco de teste e treinamento
 
-amostra <- sample(2, nrow(dados_final_medio), replace = TRUE, prob = c(0.7, 0.3))
-conjunto_treinamento_medio <- dados_final_medio[amostra == 1, ]
-conjunto_teste_medio <- dados_final_medio[amostra == 2, ]
+# amostra <- initial_split(dados, prop = 0.7)
+# conjunto_treinamento_medio <- dados_final_medio[amostra == 1, ]
+# conjunto_teste_medio <- dados_final_medio[amostra == 2, ]
 
-cv_ponto_medio <- vfold_cv(data = conjunto_treinamento_medio, v = 20)
+cv_ponto_medio <- vfold_cv(data = conjunto_treinamento, v = 20)
 
 tunagem_ponto_medio <- 
   tune_grid(
@@ -67,6 +72,9 @@ tunagem_ponto_medio <-
     control = control_grid(save_pred = TRUE, verbose = TRUE, allow_par = FALSE),
     param_info = rand_params
   )
+
+ponto_medio_wf <- ponto_medio_wf |> finalize_workflow(select_best(tunagem_ponto_medio, "rmse"))
+ajuste_final <- last_fit(ponto_medio_wf, divisao_teste_treinamento, metrics = metric_set(rmse))
 
 # modelo maximo
 

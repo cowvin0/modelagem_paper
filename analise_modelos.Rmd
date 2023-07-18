@@ -15,6 +15,7 @@ library(randomForest)
 library(timetk)
 library(readxl)
 library(visdat)
+library(modeltime)
 library(knitr)
 library(ggplot2)
 tidymodels_prefer()
@@ -107,7 +108,7 @@ dados_final_maxima <- dados_rec_maxima |> prep() |> bake(new_data = dados) |> dr
          Data = Data,
          .keep = "none")
 
-rec_maxima <- dados_final_minima |> 
+rec_maxima <- dados_final_maxima |> 
   recipe(y ~., data = dados_final_maxima)
 
 conjunto_treinamento_maxima <- dados_final_maxima[amostra == 1, ]
@@ -142,7 +143,7 @@ dados_rec_minima <- dados |>
 
 dados_final_minima <- dados_rec_minima |> prep() |> bake(new_data = dados) |> drop_na() |> 
   mutate(y = log(Minima) - log(lag_1_Minima),
-         x1 = (lag_1_Minima/lag_22_Minima)^(1/21),
+         x1 = (lag_1_Minima/lag_22_Minima)^(1/21), |> 
          x2 = Abertura/lag_1_Minima,
          Data = Data,
          .keep = "none")

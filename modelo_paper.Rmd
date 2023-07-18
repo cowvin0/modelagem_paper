@@ -1,0 +1,118 @@
+---
+title: "Modelagem com séries temporais"
+author: "Gabriel de Jesus Pereira"
+output: html_document
+---
+
+## Pacotes
+
+```{r}
+library(tidyverse)
+library(modeltime)
+library(timetk)
+library(tidymodels)
+library(dplyr)
+library(readxl)
+```
+
+## Banco de dados
+
+```{r}
+dados <- read_xlsx("WDOLFUT-DIARIO-02_01_2018_a_03-05-2023.xlsx")
+```
+
+```{r}
+df <- dados |> 
+  arrange(Data) |> 
+  future_frame(.date_var = Data, .length_out = 100, .bind_data = TRUE)
+
+df |> plot_time_series(Data, Minima)
+```
+
+## Banco de teste e trainamento
+
+```{r}
+splits <- time_series_split(
+  data = df,
+  date_var = Data,
+  assess = "1.9 year",
+  cumulative = TRUE
+)
+
+splits |> 
+  tk_time_series_cv_plan() |> 
+  plot_time_series_cv_plan(Data, Minima)
+
+# Teste e treinamento
+
+treino <- training(splits)
+teste <- testing(splits)
+```
+
+## Modelo
+
+```{r}
+## Arima
+
+model_arima <- arima_reg() |> 
+  set_engine("auto_arima") |> 
+  fit(Minima ~ ., treino)
+
+## Prophet
+
+model_prophet <- prophet_reg(
+  seasonality_yearly = TRUE
+) |> 
+  set_engine("prophet") |> 
+  fit(Minima ~ ., treino)
+
+## GLM
+
+model_glmnet <- linear_reg(penalty = 0.01) |> 
+  set_engine("glmnet") |> 
+  fit(
+    Minima ~ wday(Data, label = TRUE)
+           + month(Data, label = TRUE)
+           + as.numeric(Data)
+           + Abertura
+           + Maxima
+           + Fechamento,
+    treino
+  )
+
+```
+
+```{r}
+model_tbl <- modeltime_table(
+  model_arima,
+  model_prophet,
+  model_glmnet
+)
+```
+
+```{r}
+calib_tbl <- model_tbl |> 
+  modeltime_calibrate(teste)
+
+calib_tbl |> modeltime_accuracy()
+
+calib_tbl |> 
+  modeltime_forecast(
+    new_data = teste,
+    actual_data = df
+  ) |> 
+  plot_modeltime_forecast()
+```
+
+```{r}
+future_forecast_tbl <- calib_tbl |> 
+  modeltime_refit(df) |> 
+  modeltime_forecast(
+    h = "1.9 year",
+    actual_data = df
+  )
+
+future_forecast_tbl |> 
+  plot_modeltime_forecast()
+```
+
